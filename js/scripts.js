@@ -22,7 +22,7 @@ main.appendChild(seccionAgregar);
 
 // SOLO TEXTO, SIN FECHA MANUAL
 const labelTexto = document.createElement("label");
-labelTexto.innerText = "Contame qué pasó (con todos los detalles que quieras):";
+labelTexto.innerText = "Situación que pasó:";
 labelTexto.htmlFor = "texto-situacion";
 seccionAgregar.appendChild(labelTexto);
 
