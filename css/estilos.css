@@ -19,22 +19,104 @@ body {
 }
 
 /* ======= HEADER / TÍTULO ======= */
-.titulo {
+.titulo{
   margin-bottom: 1.8rem;
   display: flex;
-  align-items: baseline;
-  gap: 0.6rem;
+  flex-direction: column;
+  gap: .65rem;
 }
 
-.titulo::before {
+/* fila de arriba (título con barrita) */
+.titulo .title-row{
+  display:flex;
+  align-items:baseline;
+  gap:.6rem;
+}
+
+/* fila de abajo (sync + acciones + cuenta) */
+.titulo .meta-row{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  flex-wrap:wrap;
+  gap:.8rem;
+}
+
+.header-actions{
+  display:flex;
+  align-items:center;
+  gap:.5rem;
+}
+
+/* Botones connect/refresh */
+.btn-connect{
+  background:#7b5cff;
+  color:#fff;
+  border:none;
+}
+.btn-connect:hover{ background:#9b7cff; }
+
+.btn-refresh{
+  background:#303030;
+}
+.btn-refresh:hover{ background:#3f3f3f; }
+
+.account-pill{
+  display:inline-flex;
+  align-items:center;
+  padding:.28rem .55rem;
+  border-radius:999px;
+  font-size:.85rem;
+  border:1px solid rgba(255,255,255,0.08);
+  background:rgba(255,255,255,0.04);
+  color: var(--yt-text-muted);
+  max-width: 72vw;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+
+/* Estado sync (pill) */
+.sync-pill{
+  display:inline-flex;
+  align-items:center;
+  gap:.5rem;
+  padding:.35rem .6rem;
+  border-radius:999px;
+  font-size:.85rem;
+  border:1px solid rgba(255,255,255,0.08);
+  background:rgba(255,255,255,0.04);
+  color: var(--yt-text-muted);
+  user-select:none;
+}
+.sync-dot{
+  width:9px;
+  height:9px;
+  border-radius:999px;
+  background: var(--yt-text-muted);
+}
+.sync-pill.ok{ color:#c8facc; border-color: rgba(46,160,67,.35); }
+.sync-pill.ok .sync-dot{ background:#2ea043; }
+.sync-pill.saving{ color:#dbeafe; border-color: rgba(62,166,255,.35); }
+.sync-pill.saving .sync-dot{ background: var(--yt-accent); animation:pulse 1s infinite; }
+.sync-pill.offline{ color:#ffe9c2; border-color: rgba(210,153,34,.35); }
+.sync-pill.offline .sync-dot{ background:#d29922; }
+
+@keyframes pulse{
+  0%{ transform:scale(1); opacity:.6; }
+  50%{ transform:scale(1.25); opacity:1; }
+  100%{ transform:scale(1); opacity:.6; }
+}
+
+.titulo .title-row::before {
   content: "";
   width: 6px;
   height: 32px;
   border-radius: 999px;
-  /* NUEVO COLOR: violeta-azul */
   background: linear-gradient(180deg, #4c6fff, #9f7aea);
   box-shadow: 0 0 10px rgba(79, 70, 229, 0.7);
 }
+
 
 .titulo h1 {
   font-family: "Bebas Neue", system-ui, sans-serif;
