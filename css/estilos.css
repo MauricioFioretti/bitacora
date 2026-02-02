@@ -11,94 +11,132 @@
 
 body {
   margin: 0;
-  padding: 1.5rem;
+  min-height: 100vh;
+  padding: 22px 14px;
   background: var(--yt-bg);
   color: var(--yt-text);
   font-family: "Montserrat", system-ui, -apple-system, BlinkMacSystemFont,
     "Segoe UI", sans-serif;
 }
 
-/* ======= HEADER / TÍTULO ======= */
+@media (min-width: 900px){
+  body{ padding: 28px 22px; }
+}
+
+/* ======= HEADER / TÍTULO — estilo “Notas para siempre” (mantiene tus colores) ======= */
+
+/* centrado “tipo app” (como Notas) */
+header, main{
+  width: 100%;
+  max-width: 620px;
+  margin: 0 auto;
+  display: block;
+}
+@media (min-width: 900px){
+  header, main{ max-width: 860px; }
+}
+@media (min-width: 1200px){
+  header, main{ max-width: 1100px; }
+}
+
 .titulo{
-  margin-bottom: 1.8rem;
-  display: flex;
-  flex-direction: column;
-  gap: .65rem;
-}
+  position: relative;
+  margin-bottom: 16px;
 
-/* fila de arriba (título con barrita) */
-.titulo .title-row{
+  /* card */
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.10);
+  border-radius: 14px;
+  padding: 14px;
+
+  box-shadow: 0 10px 26px rgba(0,0,0,.35);
+
   display:flex;
-  align-items:baseline;
-  gap:.6rem;
+  flex-direction:column;
+  gap: 10px;
 }
 
-/* fila de abajo (sync + acciones + cuenta) */
-.titulo .meta-row{
+/* barrita vertical (dejé tu vibe/colores) */
+.titulo::before{
+  content:"";
+  position:absolute;
+  left: 12px;
+  top: 12px;
+  bottom: 12px;
+  width: 6px;
+  border-radius: 999px;
+
+  /* tus colores */
+  background: linear-gradient(180deg, #4c6fff, #9f7aea);
+  box-shadow: 0 0 12px rgba(79, 70, 229, 0.55);
+}
+
+.header-row-1,
+.header-row-2{
+  padding-left: 14px;
+}
+
+.titulo h1{
+  margin: 0;
+  font-family: "Bebas Neue", system-ui, sans-serif;
+  font-size: clamp(1.85rem, 6vw, 2.6rem);
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  line-height: 1.0;
+}
+
+/* barra auth */
+.auth-bar{
   display:flex;
   align-items:center;
   justify-content:space-between;
-  flex-wrap:wrap;
-  gap:.8rem;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
-.header-actions{
+.auth-left{
   display:flex;
   align-items:center;
-  gap:.5rem;
+  gap: 8px;
+  flex-wrap: wrap;
+  min-width: 0;
 }
 
-/* Botones connect/refresh */
-.btn-connect{
-  background:#7b5cff;
-  color:#fff;
-  border:none;
-}
-.btn-connect:hover{ background:#9b7cff; }
-
-.btn-refresh{
-  background:#303030;
-}
-.btn-refresh:hover{ background:#3f3f3f; }
-
+/* pills */
+.sync-pill,
 .account-pill{
   display:inline-flex;
   align-items:center;
-  padding:.28rem .55rem;
-  border-radius:999px;
-  font-size:.85rem;
-  border:1px solid rgba(255,255,255,0.08);
-  background:rgba(255,255,255,0.04);
+  gap:.5rem;
+  padding: .42rem .65rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.10);
+  background: rgba(0,0,0,0.18);
   color: var(--yt-text-muted);
-  max-width: 72vw;
+  user-select:none;
+}
+
+.account-pill{
+  max-width: 320px;
   overflow:hidden;
   text-overflow:ellipsis;
   white-space:nowrap;
 }
 
-/* Estado sync (pill) */
-.sync-pill{
-  display:inline-flex;
-  align-items:center;
-  gap:.5rem;
-  padding:.35rem .6rem;
-  border-radius:999px;
-  font-size:.85rem;
-  border:1px solid rgba(255,255,255,0.08);
-  background:rgba(255,255,255,0.04);
-  color: var(--yt-text-muted);
-  user-select:none;
-}
 .sync-dot{
-  width:9px;
-  height:9px;
-  border-radius:999px;
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
   background: var(--yt-text-muted);
 }
+
+/* estados (usa tus vars actuales) */
 .sync-pill.ok{ color:#c8facc; border-color: rgba(46,160,67,.35); }
 .sync-pill.ok .sync-dot{ background:#2ea043; }
+
 .sync-pill.saving{ color:#dbeafe; border-color: rgba(62,166,255,.35); }
 .sync-pill.saving .sync-dot{ background: var(--yt-accent); animation:pulse 1s infinite; }
+
 .sync-pill.offline{ color:#ffe9c2; border-color: rgba(210,153,34,.35); }
 .sync-pill.offline .sync-dot{ background:#d29922; }
 
@@ -108,22 +146,50 @@ body {
   100%{ transform:scale(1); opacity:.6; }
 }
 
-.titulo .title-row::before {
-  content: "";
-  width: 6px;
-  height: 32px;
-  border-radius: 999px;
-  background: linear-gradient(180deg, #4c6fff, #9f7aea);
-  box-shadow: 0 0 10px rgba(79, 70, 229, 0.7);
+/* botones header (mantengo tu violeta) */
+.header-actions{
+  display:flex;
+  align-items:center;
+  gap: 8px;
 }
 
+.btn-connect{
+  background:#7b5cff;
+  color:#fff;
+  border:none;
+  border-radius: 12px;
+  padding: 10px 12px;
+  font-weight: 600;
+}
+.btn-connect:hover{ background:#9b7cff; }
 
-.titulo h1 {
-  font-family: "Bebas Neue", system-ui, sans-serif;
-  color: #fff;
-  font-size: 2.6rem;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
+.btn-refresh{
+  width: 44px;
+  min-width: 44px;
+  display:flex;
+  justify-content:center;
+  align-items:center;
+
+  background:#303030;
+  border-radius: 12px;
+}
+.btn-refresh:hover{ background:#3f3f3f; }
+
+/* mobile: auth en columna, como Notas */
+@media (max-width: 520px){
+  .titulo{ padding: 12px; }
+  .titulo::before{ left: 10px; top: 10px; bottom: 10px; }
+  .header-row-1, .header-row-2{ padding-left: 12px; }
+
+  .auth-bar{
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .auth-left{ width: 100%; }
+  .header-actions{ width: 100%; }
+  .btn-connect{ width: 100%; }
+  .btn-refresh{ width: 100%; min-width: unset; }
+  .account-pill{ max-width: 100%; }
 }
 
 /* ======= SECCIÓN AGREGAR SITUACIÓN ======= */

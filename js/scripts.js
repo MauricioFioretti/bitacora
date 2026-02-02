@@ -8,7 +8,14 @@
    ========================================================= */
 
 // ================== CONFIG ==================
-const API_URL = "https://script.google.com/macros/s/AKfycbwDkRO7vou0cYwe4P_I9dTJrXTrelJA54Kn6E5nnoqSuX5VID9UIzg-AaHB1_h_OapGkg/exec"; 
+// ✅ Usar Google Sheets API directo (más rápido que Apps Script WebApp)
+const SPREADSHEET_ID = "1hX4s5KlgHkPzV0PLTo4WY2RemBCGjqaRp_EJ1zsmZig";
+const SHEET_NAME = "Bitacora"; // pestaña
+
+// Columnas esperadas:
+// A: clientId  (para idempotencia / dedupe)
+// B: texto
+// C: timestamp ISO
 
 // ================== CONFIG OAUTH (GIS) ==================
 const OAUTH_CLIENT_ID = "789127451795-jocq4e8m0su82qe9s9rie3d73tveodmm.apps.googleusercontent.com";
@@ -20,7 +27,10 @@ const OAUTH_SCOPES = [
   "openid",
   "email",
   "profile",
-  "https://www.googleapis.com/auth/drive.metadata.readonly"
+  "https://www.googleapis.com/auth/userinfo.email",
+  "https://www.googleapis.com/auth/userinfo.profile",
+  // ✅ leer/escribir en la planilla (Sheets API)
+  "https://www.googleapis.com/auth/spreadsheets"
 ].join(" ");
 
 // LocalStorage OAuth
@@ -33,40 +43,55 @@ const LS_PENDING = "bitacora_pending_v1";          // { queue:[{clientId,texto,c
 
 // ================== UI: construir estructura ==================
 const header = document.querySelector("header");
+const main = document.querySelector("main");
 
+// opcional: clases “tipo app” (no rompe nada si no existen estilos)
+header.classList.add("app-header");
+main.classList.add("app-main");
+
+// ----- Card header estilo “Notas para siempre” -----
 const seccionTitulo = document.createElement("section");
-seccionTitulo.classList = "titulo";
+seccionTitulo.className = "titulo";
 header.appendChild(seccionTitulo);
 
-const titleRow = document.createElement("div");
-titleRow.className = "title-row";
-seccionTitulo.appendChild(titleRow);
+// Row 1: título
+const headerRow1 = document.createElement("div");
+headerRow1.className = "header-row-1";
+seccionTitulo.appendChild(headerRow1);
 
 const h1 = document.createElement("h1");
 h1.innerText = "Bitácora de situaciones";
-titleRow.appendChild(h1);
+headerRow1.appendChild(h1);
 
-const metaRow = document.createElement("div");
-metaRow.className = "meta-row";
-seccionTitulo.appendChild(metaRow);
+// Row 2: auth bar (pill estado + pill cuenta + botones)
+const headerRow2 = document.createElement("div");
+headerRow2.className = "header-row-2";
+seccionTitulo.appendChild(headerRow2);
 
+const authBar = document.createElement("div");
+authBar.className = "auth-bar";
+headerRow2.appendChild(authBar);
 
-// Pill de estado (similar a Lista Compras)
+const authLeft = document.createElement("div");
+authLeft.className = "auth-left";
+authBar.appendChild(authLeft);
+
+// Pill de estado
 const syncPill = document.createElement("div");
 syncPill.className = "sync-pill";
 syncPill.innerHTML = `<span class="sync-dot"></span><span class="sync-text">Cargando…</span>`;
-metaRow.appendChild(syncPill);
+authLeft.appendChild(syncPill);
 
-// Acciones
-const headerActions = document.createElement("div");
-headerActions.className = "header-actions";
-metaRow.appendChild(headerActions);
-
-// Pill cuenta (CREAR ANTES de usar)
+// Pill cuenta (va a la izquierda, como “Notas…”)
 const accountPill = document.createElement("div");
 accountPill.className = "account-pill";
 accountPill.style.display = "none";
-headerActions.appendChild(accountPill);
+authLeft.appendChild(accountPill);
+
+// Acciones (botones a la derecha)
+const headerActions = document.createElement("div");
+headerActions.className = "header-actions";
+authBar.appendChild(headerActions);
 
 // Botón conectar
 const btnConnect = document.createElement("button");
@@ -85,8 +110,15 @@ btnRefresh.title = "Reintentar conexión";
 btnRefresh.style.display = "none";
 headerActions.appendChild(btnRefresh);
 
-// Main
-const main = document.querySelector("main");
+// Botón expirar token (oculto siempre)
+const btnExpire = document.createElement("button");
+btnExpire.className = "btn-expire";
+btnExpire.type = "button";
+btnExpire.textContent = "⏳ Expirar";
+btnExpire.title = "Expirar token local y probar reconexión silenciosa";
+btnExpire.style.display = "none";
+btnExpire.hidden = true; // 👈 oculto siempre
+headerActions.appendChild(btnExpire);
 
 const seccionAgregar = document.createElement("section");
 seccionAgregar.classList = "agregarSituacion";
@@ -135,12 +167,19 @@ function setAccountUI(email) {
     accountPill.textContent = "";
     btnConnect.textContent = "Conectar";
     btnConnect.dataset.mode = "connect";
+
+    // ocultar expirar si no hay cuenta
+    if (typeof btnExpire !== "undefined") btnExpire.style.display = "none";
     return;
   }
+
   accountPill.style.display = "inline-flex";
   accountPill.textContent = e;
   btnConnect.textContent = "Cambiar cuenta";
   btnConnect.dataset.mode = "switch";
+
+  // mostrar expirar cuando hay cuenta
+  if (typeof btnExpire !== "undefined") btnExpire.style.display = "inline-block";
 }
 
 // ================== Fecha helpers (igual que tu versión) ==================
@@ -252,8 +291,35 @@ function loadStoredOAuth() {
 function saveStoredOAuth(access_token, expires_at) {
   try { localStorage.setItem(LS_OAUTH, JSON.stringify({ access_token, expires_at })); } catch {}
 }
+
 function clearStoredOAuth() {
   try { localStorage.removeItem(LS_OAUTH); } catch {}
+}
+
+// Expira token local (runtime + storage) sin revocar permisos en Google.
+// Sirve para testear que el "silent refresh" vuelva a obtener token sin popup.
+function expireOAuthTokenLocal() {
+  const hadToken = !!oauthAccessToken;
+
+  // limpiar runtime
+  oauthAccessToken = "";
+  oauthExpiresAt = 0;
+
+  // limpiar storage
+  clearStoredOAuth();
+
+  // UI
+  setSync("offline", "Token expirado — probando reconexión…");
+  btnRefresh.style.display = "inline-block";
+
+  // si había token, intentamos reconectar SIN popup
+  // (si hay sesión y consentimiento previo, debería volver sin pedir permisos)
+  if (hadToken || loadStoredOAuthEmail()) {
+    reconnectAndRefresh().catch(() => {});
+  } else {
+    // si no hay hint/cuenta, queda en “Necesita Conectar”
+    setSync("offline", "Necesita Conectar");
+  }
 }
 
 function loadStoredOAuthEmail() {
@@ -361,29 +427,100 @@ async function ensureOAuthToken(allowInteractive = false, interactivePrompt = "c
 
 // ================== API client (POST text/plain) ==================
 async function apiPost_(payload) {
-  let r, text;
+  // payload: { mode, access_token, ... }
+  const mode = (payload?.mode || "").toString().toLowerCase();
+  const token = (payload?.access_token || "").toString();
+
+  if (!token) return { ok: false, error: "auth_required" };
+
+  const sheetEsc = encodeURIComponent(SHEET_NAME);
 
   try {
-    r = await fetch(API_URL, {
-      method: "POST",
-      headers: { "Content-Type": "text/plain;charset=utf-8" },
-      body: JSON.stringify(payload || {}),
-      cache: "no-store",
-      redirect: "follow"
-    });
+    // ---------- WHOAMI ----------
+    if (mode === "whoami") {
+      const r = await fetch("https://openidconnect.googleapis.com/v1/userinfo", {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!r.ok) return { ok: false, error: "whoami_failed" };
+      const data = await r.json();
+      return { ok: true, email: (data?.email || "").toString().toLowerCase().trim() };
+    }
+
+    // ---------- LIST ----------
+    if (mode === "list") {
+      // Lee A2:C => clientId, texto, timestamp
+      const url =
+        `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(SPREADSHEET_ID)}` +
+        `/values/${sheetEsc}!A2:C?majorDimension=ROWS`;
+
+      const r = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+      const txt = await r.text();
+      if (!r.ok) return { ok: false, error: "list_failed", detail: txt.slice(0, 800) };
+
+      const json = JSON.parse(txt);
+      const values = Array.isArray(json?.values) ? json.values : [];
+
+      const items = values
+        .filter(row => (row?.[1] || "").toString().trim() !== "") // texto en col B
+        .map(row => ({
+          texto: (row?.[0] || "").toString(),
+          timestamp: (row?.[1] || "").toString(),
+          clientId: (row?.[2] || "").toString()
+        }));
+
+      return { ok: true, items };
+    }
+
+    // ---------- ADD_BATCH ----------
+    if (mode === "add_batch") {
+      const entries = Array.isArray(payload?.entries) ? payload.entries : [];
+      if (!entries.length) return { ok: true, added: 0 };
+
+      // Armamos filas: [clientId, texto, timestamp]
+      const rows = entries
+        .map(e => ({
+          clientId: (e?.clientId || "").toString().trim(),
+          texto: (e?.texto || "").toString().trim(),
+          createdAt: e?.createdAt ? Number(e.createdAt) : Date.now()
+        }))
+        .filter(e => e.clientId && e.texto)
+        .map(e => ([
+          e.clientId,
+          e.texto,
+          new Date(e.createdAt).toISOString()
+        ]));
+
+      if (!rows.length) return { ok: true, added: 0 };
+
+      // Append masivo
+      const url =
+        `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(SPREADSHEET_ID)}` +
+        `/values/${sheetEsc}!A:C:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`;
+
+      const body = { values: rows };
+
+      const r = await fetch(url, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(body)
+      });
+
+      const txt = await r.text();
+      if (!r.ok) return { ok: false, error: "add_batch_failed", detail: txt.slice(0, 800) };
+
+      return { ok: true, added: rows.length };
+    }
+
+    // ---------- PING ----------
+    if (mode === "ping") return { ok: true, pong: true };
+
+    return { ok: false, error: "bad_mode" };
   } catch (e) {
     return { ok: false, error: "network_error", detail: String(e?.message || e) };
   }
-
-  try { text = await r.text(); }
-  catch (e) { return { ok: false, error: "read_error", status: r.status, detail: String(e?.message || e) }; }
-
-  if (!r.ok) {
-    return { ok: false, error: "http_error", status: r.status, detail: (text || "").slice(0, 800) };
-  }
-
-  try { return JSON.parse(text); }
-  catch { return { ok: false, error: "non_json", status: r.status, detail: (text || "").slice(0, 800) }; }
 }
 
 async function apiCall(mode, payload = {}, opts = {}) {
@@ -434,7 +571,10 @@ function sortSituacionesDesc(items) {
 async function fetchSituacionesRemote() {
   const resp = await apiCall("list", {}, { allowInteractive: false });
   if (!resp?.ok) throw new Error(resp?.error || "list_failed");
-  return sortSituacionesDesc(resp?.items || []);
+
+  // Normalizamos + orden desc por timestamp
+  const items = Array.isArray(resp?.items) ? resp.items : [];
+  return sortSituacionesDesc(items);
 }
 
 // ================== Pending queue: add + flush ==================
@@ -516,14 +656,32 @@ async function flushPending() {
 
   setSync("saving", "Sincronizando…");
 
-  // mandamos en batch para que sea rápido
-  const resp = await apiCall("add_batch", { entries: queue }, { allowInteractive: false });
+  // 1) Traer remote para dedupe por clientId (evita duplicados si reintentó)
+  const remote = await fetchSituacionesRemote();
+  const existingIds = new Set(
+    remote.map(x => (x?.clientId || "").toString()).filter(Boolean)
+  );
+
+  const toSend = queue.filter(e => !existingIds.has((e?.clientId || "").toString()));
+  if (!toSend.length) {
+    // todo ya estaba en la sheet => limpiamos cola
+    clearPending();
+    situaciones = remote;
+    saveCache(situaciones);
+    renderMuro(situaciones);
+    setSync("ok", "Sincronizado ✅");
+    btnRefresh.style.display = "none";
+    return;
+  }
+
+  // 2) Enviar batch (append)
+  const resp = await apiCall("add_batch", { entries: toSend }, { allowInteractive: false });
   if (!resp?.ok) throw new Error(resp?.error || "add_batch_failed");
 
-  // limpiar cola si ok
+  // 3) limpiar cola si ok
   clearPending();
 
-  // refrescar lista
+  // 4) refrescar lista
   const items = await fetchSituacionesRemote();
   situaciones = items;
   saveCache(situaciones);
@@ -724,6 +882,11 @@ btnRefresh.addEventListener("click", async () => {
   await reconnectAndRefresh();
 });
 
+// Expirar token local (sin revocar permisos)
+btnExpire.addEventListener("click", async () => {
+  expireOAuthTokenLocal();
+});
+
 // auto-refresh token (evita popups)
 setInterval(async () => {
   try {
@@ -761,9 +924,17 @@ window.addEventListener("load", async () => {
       oauthAccessToken = stored.access_token;
       oauthExpiresAt = stored.expires_at;
       setAccountUI(loadStoredOAuthEmail());
+
+      // mostrar botón expirar si hay cuenta
+      if (typeof btnExpire !== "undefined") btnExpire.style.display = "inline-block";
     } else {
       setAccountUI(loadStoredOAuthEmail());
-    }
+
+      // si hay email guardado, mostrar expirar igual (sirve para testear)
+      if (loadStoredOAuthEmail() && typeof btnExpire !== "undefined") {
+        btnExpire.style.display = "inline-block";
+      }
+    } 
   } catch {}
 
   // 1) cache instantáneo
